@@ -1,0 +1,29 @@
+<p>
+	Most of <%= @filter.join(' and ') %> are <%=@summary.join(' and ') %> : <%=@truth%>
+</p>
+<%
+	attrs = [:age, :young?, :marital_status, :single?]
+	stat = [:age]
+%>
+<table>
+	<thead>
+		<% attrs.each do |attr| %>
+			<th><%=attr%><br>
+				<% if stat.include? attr %>
+					Min=<%=Person.min(attr)%><br>
+					Ave=<%=Person.ave(attr)%><br>
+					Max=<%=Person.max(attr)%>
+				<% end %>
+			</th>
+		<% end%>
+	</thead>
+	<tbody>
+		<% @sample.each do |person| %>
+			<tr>
+				<% attrs.each do |attr| %>
+					<td><%=person.send(attr)%></td>
+				<% end%>
+			</tr>
+		<% end %>
+	</tbody>
+</table>
