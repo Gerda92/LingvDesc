@@ -1,6 +1,6 @@
 LD::Application.routes.draw do
   
-  get "summaries/index"
+  root to: 'summaries#index'
 
   # The priority is based upon order of creation:
   # first created -> highest priority.

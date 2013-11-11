@@ -1,12 +1,12 @@
 class Person < ActiveRecord::Base
 
-	set_table_name "profiles_anonymized"
+	set_table_name "people"
 	set_primary_key :person_id
 
-	cattr_reader :attr_of_interest, :fuzzy_attr, :crisp_attr
+	cattr_reader :attr_of_interest, :fuzzy_attr, :crisp_attr, :attr
 
 	def self.attr_of_interest
-		@@attr_of_interest ||= [:age, :audio_n, :fr_age, :fr_high_education_percent, :friends_n,
+		@@attr_of_interest ||= [:age, :audio_n, :fr_age, :friends_n,
 			:groups_n, :marital_status, :photos_n, :sex, :wall_posts_n, :politics,
 			:likes_received_per_year, :posts_per_year, :religion]
 	end
@@ -17,7 +17,21 @@ class Person < ActiveRecord::Base
 				:young, [25, 1, 40, 0],
 				:middle_aged, [25, 0, 40, 1, 50, 1, 65, 0],
 				:old, [50, 0, 65, 1]
+			],
+
+			friends_n: [
+				:have_few_friends, [39, 1, 94, 0],
+				:have_moderate_number_of_friends, [39, 0, 94, 1, 180, 0],
+				:have_many_friends, [94, 0, 180, 1]
 			]
+=begin
+			,
+			groups_n: [
+				:member_of_few_groups, [8, 1, 25, 0],
+				:member_of_moderate_number_of_groups, [8, 0, 25, 1, 70, 0],
+				:member_of_many_groups, [25, 0, 70, 1]
+			]
+=end
 		}
 	end
 
@@ -31,7 +45,10 @@ class Person < ActiveRecord::Base
 
 	def self.crisp_attr
 		@@crisp_attr ||= {
-			marital_status: [:single, :engaged, :married]
+			#marital_status: [:single, :engaged, :married],
+			sex: [:m, :f],
+			#politics: [:commun, :indiff, :social, :liberal, :conserv],
+			#religion: [:east_christ, :west_christ, :islam, :judaism, :atheism]
 		}
 	end
 
@@ -41,6 +58,11 @@ class Person < ActiveRecord::Base
 				send(attr) == name.to_s ? 1 : 0
 			end
 		end
+	end
+
+	def self.attributes
+		@@attr = @@fuzzy_attr.inject({}) {|h, el| h[el[0]] = el[1].select{|x| x.class == Symbol}; h}
+			.merge @@crisp_attr
 	end
 
 	# BEGIN This should be in lib
@@ -64,45 +86,45 @@ class Person < ActiveRecord::Base
   	end
 
 	def self.summary? data, filter, summary
-		most(aggregate(data, filter + summary) / aggregate(data, filter))
+		truth = most(aggregate(data, filter + summary) /
+			(filter.empty? ? data.count : aggregate(data, filter))) * 1.0
+		truth.nan? ? 0.0 : truth
+  	end
+
+  	def self.candidates
+  		prod = attributes.values[0]
+  		attributes.values[1..-1].each do |params|
+  			prod = prod.product([nil] + params).map{|x| x.flatten.select{|x| !x.nil?} }
+  		end
+  		prod.flat_map {|comb| comb.map{|el| [comb - [el], [el]]}}
   	end
 
   	# END
 
 	# Scopes
 
-	def self.complete
-		cond = attr_of_interest.join(' IS NOT NULL AND ') + ' IS NOT NULL'
-	    find(:all, conditions: cond, limit: 100)
-	end
-
 	def self.almaty
-		cond = attr_of_interest.join(' IS NOT NULL AND ') + ' IS NOT NULL'
-	    where(country_id: 'kz', city_id: 1526384).find(:all, conditions: cond, offset: 10, limit: 100)
+	    where(country_id: 'kz', city_id: 1526384).limit(100)
 	end
 
 	# Statistics
 
-	def self.min attr
-		Person.minimum(attr)
+	def self.median attr, n = Person.count, offset = 0
+		medians = Person.order(attr).find(:all, offset: (offset + (n - 1)/2), limit: 2)
+			.map{|p| p.send(attr) }
+		n.odd? ? medians[0] : (1.0*medians.reduce(:+)/2)
 	end
 
-	def self.ave attr
-		Person.average(attr)
+	def self.first_quart attr
+		n = Person.count
+		median(attr, n/2, 0)
 	end
 
-	def self.max attr
-		Person.maximum(attr)
+	def self.third_quart attr
+		n = Person.count
+		median(attr, n/2, (n+1)/2)
 	end
 
-	def self.n attr
-		Person.find(:all, conditions: (attr.to_s + ' IS NOT NULL')).count
-	end
-
-	def self.median attr
-		Person.order(attr).find(:all, conditions: (attr.to_s + ' IS NOT NULL'), offset: (n/2), limit:1)
-	end
-
-	class << self; extend ActiveSupport::Memoizable; self; end.memoize :almaty, :min, :ave, :max, :n
+	class << self; extend ActiveSupport::Memoizable; self; end.memoize :almaty, :median, :first_quart, :third_quart
 
 end

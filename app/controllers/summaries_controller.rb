@@ -1,13 +1,12 @@
 class SummariesController < ApplicationController
+
   def index
-  	#young = ->(x) { People.build_fs [25, 1, 40, 0], x }
-  	#raise young.inspect
-  	#raise Person.n(:age).inspect
-  	@sample = Person.almaty
-  	@filter = [:middle_aged]
-  	@summary = [:single]
-  	#raise @sample.map{|p| p.single? }.inspect
-  	@truth = Person.summary?(@sample, @filter, @summary)
+    #@candidates = [[[:old, :f], [:have_few_friends]]]#Person.candidates
+    @candidates = Person.candidates
+  	@sample = Person.all
+  	@candidates = @candidates.map do |filter, summarizer|
+      [filter, summarizer, Person.summary?(@sample, filter, summarizer)]
+    end.select{|f, s, t| t > 0}.sort {|a, b| b[2] <=> a[2]}
   end
 
 end
