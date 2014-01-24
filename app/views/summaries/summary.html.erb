@@ -1,0 +1,71 @@
+<div class="row">
+
+<h2>Derivation of Linguistic Summaries from Databases</h2>
+
+</div>
+
+<div class="row">
+
+<h3>Linguistic Description of Data</h3>
+
+<% @candidates.each do |filter, summarizer, truth| %>
+<p>Most of <%= filter.join(' and ') %> people are <%=summarizer.join(' and ') %> : <%=truth%></p>
+<% end %>
+
+</div>
+
+<%
+	attrs = Person.attributes.keys
+	stat = [:age, :audio_n, :fr_age, :friends_n,
+			:groups_n, :photos_n, :wall_posts_n,
+			:likes_received_per_year, :posts_per_year]
+	params = [:minimum, :average, :maximum, :first_quart, :median, :third_quart]
+%>
+
+<!--
+<div class="row">
+
+<h3>Statistics</h3>
+
+<table class="table">
+	<thead>
+		<th></th>
+		<% stat.each do |attr| %>
+			<th><%=attr%></th>
+		<% end%>
+	</thead>
+	<tbody>
+		<% params.each do |param| %>
+			<tr>
+			<td><%=param%></td>
+			<% stat.each do |attr| %>
+				<td><%=Person.send(param, attr)%></td>
+			<% end %>
+			</tr>
+		<% end %>
+	</tbody>
+</table>
+
+</div>
+-->
+<div class="row">
+
+<h3>Data Sample</h3>
+<table class="table">
+	<thead>
+		<% attrs.each do |attr| %>
+			<th><%=attr%></th>
+		<% end%>
+	</thead>
+	<tbody>
+		<% @sample.each do |person| %>
+			<tr>
+				<% attrs.each do |attr| %>
+					<td><%=person.send(attr)%></td>
+				<% end%>
+			</tr>
+		<% end %>
+	</tbody>
+</table>
+
+</div>
