@@ -1,19 +1,15 @@
 class Miner < ActiveRecord::Base
 	
-	attr_accessible :group, :age, :profession, :emg_a, :emg_ka
+	attr_protected
 
 	cattr_reader :attr_of_interest, :fuzzy_attr, :crisp_attr, :attr
 
-	def self.attr_of_interest
-		@@attr_of_interest ||= [:group, :age, :profession, :emg_a, :emg_ka]
-	end
-
   	# FS generation
 
-  	def self.gen_fs(min, max, step)
-  		[("less_than_#{min}").to_sym, [min-step, 1, min, 0]] +
-  		Array((min..max).step(step)).flat_map{|head| [("about_#{head}").to_sym, [head-step, 0, head, 1, head+step, 0]]} +
-  		[("more_than_#{max}").to_sym, [max-step, 0, max, 1]]
+  	def self.gen_fs(name, min, max, step)
+  		[("#{name}_less_than_#{min-step}").to_sym, [min-step, 1, min, 0]] +
+  		Array((min..max).step(step)).flat_map{|head| [("#{name}_about_#{head}").to_sym, [head-step, 0, head, 1, head+step, 0]]} +
+  		[("#{name}_more_than_#{max}").to_sym, [max-step, 0, max, 1]]
   	end
 
 	def self.fuzzy_attr
@@ -22,8 +18,23 @@ class Miner < ActiveRecord::Base
 			#	:young, [25, 1, 40, 0],
 			#	:middle_aged, [25, 0, 40, 1, 50, 1, 65, 0],
 			#	:old, [50, 0, 65, 1]
-			#,
-			emg_a: self.gen_fs(550, 1300, 25)
+			#],
+			age: [
+				:less_than_40, [40, 1, 45, 0],
+				:about_45_50, [40, 0, 45, 1, 50, 1, 55, 0],
+				:more_than_55, [50, 0, 55, 1]
+			],
+			#age: self.gen_fs(:age, 45, 55, 5),
+			ea: self.gen_fs(:ea, 550, 1300, 25),
+			eka: self.gen_fs(:eka, 1.4, 1.7, 0.1),
+			sm_a: self.gen_fs(:sm_a, 50, 60, 5),
+			experience: self.gen_fs(:experience, 20, 20, 5),
+			difference: [
+				:not_significant, [0.2, 1, 0.3, 0],
+				:quite_significant, [0.2, 0, 0.3, 1, 0.4, 1, 0.5, 0],
+				:significant, [0.4, 0, 0.5, 1, 0.6, 1, 0.7, 0],
+				:very_significant, [0.6, 0, 0.7, 1]
+			]
 		}
 	end
 
@@ -41,7 +52,7 @@ class Miner < ActiveRecord::Base
 	def self.crisp_attr
 		@@crisp_attr ||= {
 			group: [:main, :control],
-			profession: [:drill_runner, :loader_operator, :stope_miner, :shaftman, :timberman]
+			profession: [:drill_runner, :loader_operator, :stope_miner, :shaftman, :timberman, :foreman, :lineman]
 		}
 	end
 
@@ -58,9 +69,27 @@ class Miner < ActiveRecord::Base
 			.merge @@crisp_attr
 	end
 
+	def self.track_difference data, filter, par1, par2
+		partition = @@fuzzy_attr[par1]
+		#raise partition.inspect
+		track = partition.each_slice(2).each_with_index.map{|fs, i|
+			{filter: fs, best_fit: find_best_fit(data, filter + [fs[0]], par2)[0],
+				compare: (i==0 ? nil : [partition[i*2-2], partition[i*2-1]]),
+				diff: (i==0 ? 0 : fuzzy_compare(data, par2, filter + [fs[0]], filter + [partition[i*2-2]]))}
+		}
+
+		track[1..-1].each_with_index.map{|sent, i|
+		{dir: sent[:diff][0], speed: [Miner.find_best_fit_fs(:difference, sent[:diff][1])[0], sent[:diff][1]],
+			from: track[i][:best_fit], to: sent[:best_fit],
+			current: sent[:filter], compare: sent[:compare]}
+		}
+	end
+
 	# BEGIN This should be in lib
 
 	def self.build_fs m, x
+		logger.debug(m)
+		logger.debug(x)
 		return m[1] if x <= m[0]
 		return m[m.count - 1] if x >= m[m.count - 2]
 		i = 2
@@ -100,13 +129,42 @@ class Miner < ActiveRecord::Base
   	end
 
   	def self.purify_fs raw
-   		Array(0..(raw.count-1)).map{|i| ((i==0 && raw[i+1][1]!=raw[i][1]) || (i==raw.count-1 && raw[i-1][1]!=raw[i][1]) ||
+   		shrinked = Array(0..(raw.count-1)).map{|i| ((i==0 && raw[i+1][1]!=raw[i][1]) || (i==raw.count-1 && raw[i-1][1]!=raw[i][1]) ||
   			(i>0 && raw[i-1][1]!=raw[i][1]) || (i<raw.count-1 && raw[i+1][1]!=raw[i][1]))}.zip(raw).select{|i, x| i}
-  			.map{|_, x| x}.flatten
+  			.map{|_, x| x}.uniq.flatten
   	end 		
 
   	def self.fuzzy_not a
   		a.each_slice(2).flat_map{|x, mf| [x, 1-mf]}
+  	end
+
+  	def self.fuzzy_less_than a
+  		#raise a.inspect
+  		i = a.each_slice(2).find_index{|_, mf| mf == 1}
+  		fuzzy_not(a.first(i*2+2))
+  	end
+
+  	def self.fuzzy_greater_than a
+  		#raise a.inspect
+  		i = a.each_slice(2).to_a.reverse.find_index{|_, mf| mf == 1}
+  		fuzzy_not(a.last(i*2+2))
+  	end
+
+  	def self.fuzzy_compare data, target_param, filter1, filter2
+  		summary1 = find_best_fit(data, filter1, target_param)
+  		summary2 = find_best_fit(data, filter2, target_param)
+  		if summary1[1] == 0 || summary2[1] == 0
+  			logger.debug(filter1.inspect)
+  			logger.debug(summary1.inspect)
+  			logger.debug(filter2.inspect)
+  			logger.debug(summary2.inspect)
+  			return [:undefined, 0]
+  		end
+  		less = summary?(data, filter1, [[target_param, fuzzy_less_than(summary2[0])]]) +
+  			summary?(data, filter2, [[target_param, fuzzy_greater_than(summary1[0])]])
+  		greater = summary?(data, filter1, [[target_param, fuzzy_greater_than(summary2[0])]]) +
+  			summary?(data, filter2, [[target_param, fuzzy_less_than(summary1[0])]])
+  		[[:less, less/2.0], [:greater, greater/2.0]].max_by{|_, t| t}
   	end
 
   	def self.fuzzy_and a, b
@@ -143,7 +201,10 @@ class Miner < ActiveRecord::Base
 
   	def self.find_best_fit data, filter, sum_param
   		data = query(data, filter).map{|x, _| x}
-  		return [0, 0] if data.empty?
+  		if data.empty?
+  			logger.debug(filter.inspect)
+  			return [0, 0]
+  		end
   		left = find_best_fit_fs(sum_param, data.min_by{|el| el[sum_param]}[sum_param])
   		right = find_best_fit_fs(sum_param, data.max_by{|el| el[sum_param]}[sum_param])
 
@@ -169,7 +230,7 @@ class Miner < ActiveRecord::Base
 		truth_l = summary?(data, filter, [[target_param, reduced_l]])
 		truth_r = summary?(data, filter, [[target_param, reduced_r]])
 
-		logger.debug "#{filter} #{cur_fs} -> #{reduced_l} #{truth_l} #{reduced_r} #{truth_r}"
+		#logger.debug "#{filter} #{cur_fs} -> #{reduced_l} #{truth_l} #{reduced_r} #{truth_r}"
 
 		threshold = 0.7
 
@@ -181,13 +242,21 @@ class Miner < ActiveRecord::Base
 	end
 
 	def self.fs_to_s fs
-		if fs[1] == 1
-			return "less_than_#{fs[0]}"
+		adj = [:approximately, :roughly, :around, :about]
+		fs = fs.each_slice(2).flat_map{|x, mf|
+			[(x.is_a?(Integer) ? x : x.round(2)), mf]
+		}
+		if fs[1] == 1.0
+			return "#{adj[0..1].sample} #{fs[0]} or less"
 		end
-		if fs[fs.count-1] == 1
-			return "more_than_#{fs[fs.count-2]}"
+		if fs[fs.count-1] == 1.0
+			return "#{adj[0..1].sample} #{fs[fs.count-2]} or greater"
 		end
-		return "about_#{fs[2]}-#{fs[4]}"
+		if fs.count == 6
+			return "#{adj.sample} #{fs[2]}"
+		else
+			return "#{adj[0..1].sample} between #{fs[2]} and #{fs[4]}"
+		end
 	end
 
 end

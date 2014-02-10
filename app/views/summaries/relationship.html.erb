@@ -1,0 +1,37 @@
+<%
+	difference = [
+		:not_significant, [0.2, 1, 0.3, 0],
+		:quite_significant, [0.2, 0, 0.3, 1, 0.4, 1, 0.5, 0],
+		:significant, [0.4, 0, 0.5, 1, 0.6, 1, 0.7, 0],
+		:very_significant, [0.6, 0, 0.7, 1]
+	]
+	aliases = {:ea => 'muscle strength', :eka => 'muscle strength asymmetry', :sm_a => 'nerve conduction velocity'}
+	@pseudos = {
+		less: ['decreased', 'fell', 'dropped', 'declined'],
+		greater: ['increased', 'rose', 'climbed'],
+		not_significant: ['was almost the same', 'did not differ significantly', 'was almost identical'],
+		quite_significant: ['quite significantly', 'slightly', 'a little'],
+		significant: ['significantly', 'substantially', 'noticeably'],
+		very_significant: ['very significantly', 'dramatically', 'drastically']
+	}
+	def build_dif dir, speed, from, to
+		if speed != :not_significant
+			"#{@pseudos[dir].sample} #{@pseudos[speed].sample} from #{Miner.fs_to_s(from)} to #{Miner.fs_to_s(to)}"
+		else
+			@pseudos[:not_significant].sample
+		end
+	end
+
+%>
+
+<div class="row">
+
+<h2>Derivation of Linguistic Summaries from Databases</h2>
+
+</div>
+
+<div class="row"><p>
+<% @track.each_with_index do |sent, i| %>
+	<%=(i == 0 ? "#{aliases[@tar].capitalize} of miners" : 'Then it')%> <%=build_dif(sent[:dir], sent[:speed][0], sent[:from], sent[:to])%> with an increase of <%=@dep%> from <%=Miner.fs_to_s(sent[:compare][1])%> to <%=Miner.fs_to_s(sent[:current][1])%>. 
+<% end %></p>
+</div>

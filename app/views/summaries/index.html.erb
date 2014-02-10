@@ -12,6 +12,10 @@
 <p>Most of <%= filter.join(' and ') %> people are <%=Miner.fs_to_s(summarizer) %> : <%=truth.round(2)%></p>
 <% end %>
 
+<% @diff.each do |filter1, filter2, diff, truth| %>
+<p><%= filter1.join(' and ') %> people's muscle strength (EMG test A) is <%=diff%> than that of <%=filter2.join(' and ') %> : <%=truth.round(2)%></p>
+<% end %>
+
 </div>
 
 <div class="row">

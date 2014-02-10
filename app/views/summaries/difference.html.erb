@@ -1,0 +1,12 @@
+<table class="table">
+<thead><th>Group 1</th><th>Group 2</th><th>Greater or less</th><th>Truth</th></thead>
+<tbody>
+<% @diff.each do |par,filter1, filter2, diff, truth| %>
+
+
+<tr><td><%=par%></td><td><%=filter1[0]%></td><td><%=filter2[0]%></td><td><%=diff%></td><td><%=truth.round(2)%></td></tr>
+
+
+<% end %>
+</tbody>
+</table>

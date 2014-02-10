@@ -1,11 +1,28 @@
 class FuzzySet
 
-	def initialize mf, label = nil
-		@mf = mf
+	attr_accessor :label, :mf, :variable
+
+	def initialize mf, variable, label = nil
+		@mf = mf.each_slice(2).to_a
+		@variable = variable
 		@label = label
 	end
 
-	def self.membership mf, x
+	def membership(x) self.class.membership(x, @mf.flatten) end
+
+	def to_s() self.class.to_s(@mf) end
+
+	def fuzzy_not() self.class.fuzzy_not(@mf) end
+
+	def fuzzy_and(b) self.class.fuzzy_and(@mf, b) end
+
+	def mf_values() self.class.mf_values(@mf) end
+
+	def heads() self.class.heads(@mf) end
+
+	def purify!() @mf = self.class.purify_mf(@mf); self end
+
+	def self.membership x, mf
 		return mf[1] if x <= mf[0]
 		return mf[mf.count - 1] if x >= mf[mf.count - 2]
 		i = 2
@@ -13,36 +30,46 @@ class FuzzySet
 		1.0 * ((x - mf[i - 2])*(mf[i + 1] - mf[i - 1])) / (mf[i] - mf[i - 2]) + mf[i - 1]
 	end
 
-  	def self.fs_values fs
-  		fs.each_slice(2).map{|x, _| x}
-  	end
-
-  	def self.heads fs
-  		fs.each_slice(2).select{|x, mf| mf == 1}.map{|x, _| x}
-  	end
-
-  	def self.to_s fs
-		if fs[1] == 1
-			return "less_than_#{fs[0]}"
+	def self.to_s mf
+		return @label if !@label.nil?
+		if mf[1] == 1
+			return "less_than_#{mf[0]}"
 		end
-		if fs[fs.count-1] == 1
-			return "more_than_#{fs[fs.count-2]}"
+		if mf[mf.count-1] == 1
+			return "more_than_#{mf[mf.count-2]}"
 		end
-		return "about_#{fs[2]}-#{fs[4]}"
+		if mf.count == 6
+			return "about_#{mf[2]}"
+		end
+		return "about_#{mf[2]}-#{mf[4]}"
 	end
 
-	def self.purify_fs raw
-   		Array(0..(raw.count-1)).map{|i| ((i==0 && raw[i+1][1]!=raw[i][1]) || (i==raw.count-1 && raw[i-1][1]!=raw[i][1]) ||
-  			(i>0 && raw[i-1][1]!=raw[i][1]) || (i<raw.count-1 && raw[i+1][1]!=raw[i][1]))}.zip(raw).select{|i, x| i}
-  			.map{|_, x| x}.flatten
-  	end 		
-
   	def self.fuzzy_not a
-  		a.each_slice(2).flat_map{|x, mf| [x, 1-mf]}
+  		a.flat_map{|x, mf| [x, 1-mf]}
   	end
 
   	def self.fuzzy_and a, b
-  		purify_fs(fs_values(a+b).uniq.sort.map{|x, mf| [x, [build_fs(a, x), build_fs(b, x)].min]})
+  		purify_mf(mf_values(a+b).uniq.sort.map{|x, mf| [x, [membership(x, a), membership(x, b)].min]})
+  	end
+
+  	def self.mf_values mf
+  		mf.map{|x, _| x}
+  	end
+
+  	def self.heads
+  		mf.select{|x, mf| mf == 1}.mf_values
+  	end
+
+	def self.purify_mf raw
+   		Array(0..(raw.count-1)).map{|i| ((i==0 && raw[i+1][1]!=raw[i][1]) || (i==raw.count-1 && raw[i-1][1]!=raw[i][1]) ||
+  			(i>0 && raw[i-1][1]!=raw[i][1]) || (i<raw.count-1 && raw[i+1][1]!=raw[i][1]))}.zip(raw).select{|i, x| i}
+  			.map{|_, x| x}.flatten
+  	end
+
+  	def self.gen_fs(min, max, step)
+  		[("less_than_#{min}").to_sym, [min-step, 1, min, 0]] +
+  		Array((min..max).step(step)).flat_map{|head| [("about_#{head}").to_sym, [head-step, 0, head, 1, head+step, 0]]} +
+  		[("more_than_#{max}").to_sym, [max-step, 0, max, 1]]
   	end
 
   	def self.fuzzy_operation op, a, b

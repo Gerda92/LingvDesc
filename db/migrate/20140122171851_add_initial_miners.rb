@@ -2,8 +2,13 @@ class AddInitialMiners < ActiveRecord::Migration
   def up
 	require 'csv'
 	attrs = Miner.column_names - ["id"]
-	CSV.open('db.csv', 'r').each do |row|
-	  Miner.create!(Hash[attrs.zip(row)])
+	params = []
+	CSV.open('db.csv', 'r').each_with_index do |row, i|
+		if i == 0
+			params = row.map{|a| a.to_sym}
+			next
+		end
+	  	Miner.create!(Hash[params.zip(row)])
 	end
   end
 
