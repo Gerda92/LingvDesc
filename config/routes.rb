@@ -2,6 +2,7 @@ LD::Application.routes.draw do
   
   root to: 'summaries#index'
   match 'difference' => 'summaries#difference'
+  match 'table' => 'summaries#difference_table'
   match 'relationship' => 'summaries#relationship'
   # The priority is based upon order of creation:
   # first created -> highest priority.
