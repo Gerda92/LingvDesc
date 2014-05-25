@@ -4,6 +4,12 @@ class SummariesController < ApplicationController
     #raise FuzzySet.new.make_fs.inspect
     #raise Miner.gen_fs(0, 10, 2).inspect
     #raise Miner.and(Miner.and([1, 1], Miner.not([4, 0, 5, 1])), Miner.not([1, 1, 2, 0])).inspect
+
+
+    raise Loan.fuzzy_compare(Loan.random20k, :age, [:single, :y_yes], [:married, :y_yes]).inspect
+    raise Loan.find_best_fit(Loan.random20k, [:y_yes], :age).inspect
+
+
     filters = Miner.gen_filters([:group, :profession])
     compare_group = [:loader_operator]
     compare = Miner.find_best_fit(Miner.all, compare_group, :ea)[0]
@@ -56,6 +62,49 @@ class SummariesController < ApplicationController
       }.select{|_,_,_,d,_| d == :greater}
     }
     @diff = @diff.select{|_,_,_,_,t| t > 0}.sort {|a, b| b[4] <=> a[4]}
+  end
+
+  def loan
+
+    @query = params[:query] || nil
+    f_summarizer = nil
+    f_filters = []
+
+    if(@query)
+      ps = @query.split(" ")
+      start = -1
+
+      ps.each_with_index do |item, index|
+        item.downcase!
+        if item == "how" && ps[index + 1] != nil
+          f_summarizer = ps[index + 1]
+        end
+        if item == "on"
+          start = index + 1
+        end
+      end
+
+      f_filters = ps[start..-1]
+      f_filters.map {|td| td.slice! ","}
+      f_filters = f_filters.map {|td| td.parameterize.underscore.to_sym }
+    end
+
+
+    @candidates = nil
+    if f_summarizer && f_filters.length > 0
+      f_summarizer = f_summarizer.parameterize.underscore.to_sym
+      @candidates = Loan.candidates(f_filters, f_summarizer)
+    end
+
+    if @candidates == nil
+      @candidates = Loan.candidates([:age, :housing], :y)
+    end
+    # raise (Loan.all.count / 2).inspect
+    @sample = Loan.random20k
+    @candidates = @candidates.map do |filter, summarizer|
+      [filter, summarizer, Loan.summary?(@sample, filter, summarizer)]
+    end.select{|f, s, t| t > 0}.sort {|a, b| b[2] <=> a[2]}
+    
   end
 
 end

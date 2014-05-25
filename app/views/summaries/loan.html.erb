@@ -1,0 +1,36 @@
+
+<div class="row">
+	<div class="col-md-8 col-md-offset-2">
+		<h2>Derivation of Linguistic Summaries from Databases</h2>
+		<hr>
+		
+		<form action="/" method="POST">
+			<div class="input-group">
+			  <input type="text" class="form-control" placeholder="<% if @query %><%= "query is - #{@query}" %><% else %>Enter your query here<% end %>" name="query">
+			  <span class="input-group-btn">
+			  	<input type="submit" class="btn btn-default" style="line-height: 1.45em;" value="Start">
+			  </span>
+			</div>
+		</form>
+
+	</div>
+</div>
+<br>
+<div class="row">
+	<div class="col-md-8 col-md-offset-2">
+		<h3>question is</h3>
+
+		<% @candidates.each do |filter, summarizer, truth| %>
+			<p>Most of <%= filter.join(' and ') %> people are <%=summarizer.join(' and ') %> : <%=truth%></p>
+		<% end %>
+	</div>
+</div>
+
+
+<%
+	attrs = Loan.attributes.keys - [:difference]
+	# stat = [:age, :audio_n, :fr_age, :friends_n,
+	# 		:groups_n, :photos_n, :wall_posts_n,
+	# 		:likes_received_per_year, :posts_per_year]
+	# params = [:minimum, :average, :maximum, :first_quart, :median, :third_quart]
+%>

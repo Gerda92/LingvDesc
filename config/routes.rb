@@ -1,6 +1,7 @@
 LD::Application.routes.draw do
   
-  root to: 'summaries#index'
+  root to: 'summaries#loan'
+  match 'succ' => 'summaries#index'
   match 'difference' => 'summaries#difference'
   match 'table' => 'summaries#difference_table'
   match 'relationship' => 'summaries#relationship'
