@@ -5,7 +5,7 @@
 		:significant, [0.4, 0, 0.5, 1, 0.6, 1, 0.7, 0],
 		:very_significant, [0.6, 0, 0.7, 1]
 	]
-	aliases = {:ea => 'muscle strength', :eka => 'muscle strength asymmetry', :sm_a => 'nerve conduction velocity'}
+	aliases = {ratio: "a persentage of people who subscribed for a term deposit"}
 	@pseudos = {
 		less: ['decreased', 'fell', 'dropped', 'declined'],
 		greater: ['increased', 'rose', 'climbed'],
@@ -32,6 +32,6 @@
 
 <div class="row"><p>
 <% @track.each_with_index do |sent, i| %>
-	<%=(i == 0 ? "#{aliases[@tar].capitalize} of miners" : 'Then it')%> <%=build_dif(sent[:dir], sent[:speed][0], sent[:from], sent[:to])%> with an increase of <%=@dep%> from <%=Miner.fs_to_s(sent[:compare][1])%> to <%=Miner.fs_to_s(sent[:current][1])%>. 
+	<%=(i == 0 ? "#{aliases[@tar].capitalize}" : 'Then it')%> <%=build_dif(sent[:dir], sent[:speed][0], sent[:from], sent[:to])%> with an increase of <%=@dep%> from <%=AgeLoan.fs_to_s(sent[:compare][0])%> to <%=AgeLoan.fs_to_s(sent[:current][0])%>. 
 <% end %></p>
 </div>
