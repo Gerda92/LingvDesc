@@ -5,18 +5,18 @@ class SummariesController < ApplicationController
     #raise Miner.gen_fs(0, 10, 2).inspect
     #raise Miner.and(Miner.and([1, 1], Miner.not([4, 0, 5, 1])), Miner.not([1, 1, 2, 0])).inspect
     filters = Miner.gen_filters([:group, :profession])
-    compare_group = [:main]
-    compare = Miner.find_best_fit(Miner.all, compare_group, :eka)[0]
+    compare_group = [:loader_operator]
+    compare = Miner.find_best_fit(Miner.all, compare_group, :ea)[0]
     #raise filters.inspect
     #raise Miner.find_best_fit(Miner.all, [:control, :stope_miner], :emg_a).inspect
     @candidates = filters.map{|filter|
       logger.debug filter.inspect
-      summary2 = Miner.find_best_fit(Miner.all, filter, :eka)
+      summary2 = Miner.find_best_fit(Miner.all, filter, :ea)
       #logger.debug Miner.fuzzy_compare(Miner.all, :emg_a, compare_group, filter).inspect
       [filter] + summary2
     }
     @diff = filters.map{|filter|
-      [compare_group] + [filter] + Miner.fuzzy_compare(Miner.all, :eka, compare_group, filter)
+      [compare_group] + [filter] + Miner.fuzzy_compare(Miner.all, :ea, compare_group, filter)
     }
     
     @sample = Miner.all
@@ -40,9 +40,9 @@ class SummariesController < ApplicationController
     @diff = @target.product(filters).map{|filter, compare|
         [compare] + Miner.fuzzy_compare(Miner.all, par, [filter], compare)
       }.map{|compare, dir, sign| [compare, dir, Miner.find_best_fit_fs(:difference, sign)[0]]}
-    raise @diff.inspect
-    #@ranking = filters.map{|filter| [filter[0], @diff.select{|_,_,f,d| f[0] == filter[0]}.count]}
-    #  .sort{|a, b| b[1] <=> a[1]}.map{|f,_| f}
+    # raise @diff.inspect
+    @ranking = filters.map{|filter| [filter[0], @diff.select{|_,_,f,d| f[0] == filter[0]}.count]}
+      .sort{|a, b| b[1] <=> a[1]}.map{|f,_| f}
     
   end
 

@@ -25,7 +25,7 @@ class Miner < ActiveRecord::Base
 				:more_than_55, [50, 0, 55, 1]
 			],
 			#age: self.gen_fs(:age, 45, 55, 5),
-			ea: self.gen_fs(:ea, 550, 1300, 25),
+			ea: self.gen_fs(:ea, 550, 1300, 50),
 			eka: self.gen_fs(:eka, 1.4, 1.7, 0.1),
 			sm_a: self.gen_fs(:sm_a, 50, 60, 5),
 			experience: self.gen_fs(:experience, 20, 20, 5),
@@ -86,6 +86,9 @@ class Miner < ActiveRecord::Base
 	end
 
 	# BEGIN This should be in lib
+
+	# Takes membership function m of a fuzzy set (array) and value x.
+	# Outputs membership degree.
 
 	def self.build_fs m, x
 		logger.debug(m)
@@ -171,6 +174,10 @@ class Miner < ActiveRecord::Base
   		purify_fs(fs_values(a+b).uniq.sort.map{|x, mf| [x, [build_fs(a, x), build_fs(b, x)].min]})
   	end
 
+  	# Takes set of objects (e.g., miners) and filter (array of linguistic labels),
+  	# filters out those who have 0 membership in filter.
+  	# Outputs array of elements like [object, membership in filter]
+
   	def self.query data, filter
   		return data.map{|el| [el, 1.0]} if filter.empty?
   		data.map{ |el|
@@ -192,53 +199,83 @@ class Miner < ActiveRecord::Base
   			prod = prod.product([nil] + attributes[param]).map{|x| x.flatten.select{|x| !x.nil?} }
   		end
   		prod
-   	end		
+   	end
+
+   	# 
 
   	def self.find_best_fit_fs param, x
   		attributes[param].map{|lab| fs = send("get_fs_#{lab}"); [lab, fs, build_fs(fs,x)]}
   			.max_by{|x| x[2]}
   	end
 
+  	# Describing a property sum_param of a subset of objects data chosen by filter filter.
+
+  	# Takes array of objects, filter, a parameter for summarization.
+  	# Outputs array [best fit fuzzy set (array), truth value].
+
   	def self.find_best_fit data, filter, sum_param
+
+  		# Filters out objects we are not interested in.
+
   		data = query(data, filter).map{|x, _| x}
+
   		if data.empty?
-  			logger.debug(filter.inspect)
-  			return [0, 0]
+   			return [0, 0]
   		end
+
+  		# Best fit fuzzy sets of the minimum and maximum values of a property manifested by filtered subset.
+
   		left = find_best_fit_fs(sum_param, data.min_by{|el| el[sum_param]}[sum_param])
   		right = find_best_fit_fs(sum_param, data.max_by{|el| el[sum_param]}[sum_param])
+
+  		# Finds indexes in fuzzy partitions for left and right fuzzy sets.
 
   		li = fuzzy_attr[sum_param].find_index(left[0])
   		ri = fuzzy_attr[sum_param].find_index(right[0])
 
+  		# Constructs a new fuzzy set = >=min AND <=max
+
   		b1 = left[1].each_slice(2).find_index{|_, mf| mf == 1}
   		b2 = right[1].each_slice(2).to_a.reverse.find_index{|_, mf| mf == 1}
   		new_fs = left[1].first(b1*2+2) + right[1].last(b2*2 + 2)
-  		fs, truth = shrink_fs(data, filter, sum_param, new_fs, summary?(data, filter, [[sum_param, new_fs]]), li, ri)
-  		[purify_fs(fs.each_slice(2).to_a), truth] 		
+
+  		fs, truth, level = shrink_fs(data, filter, sum_param, new_fs, summary?(data, filter, [[sum_param, new_fs]]), li, ri, 1)
+
+  		[purify_fs(fs.each_slice(2).to_a), truth]	
+
   	end
 
-  	def self.shrink_fs data, filter, target_param, cur_fs, truth, li, ri
+  	def self.shrink_fs data, filter, target_param, cur_fs, truth, li, ri, level
 
+  		# Creates arrays reduced from the left and right
 
   		left = fuzzy_attr[target_param][li+1]
   		right = fuzzy_attr[target_param][ri+1]
   		reduced_l = fuzzy_and(cur_fs, fuzzy_not(left))
   		reduced_r = fuzzy_and(cur_fs, fuzzy_not(right))
-  		#logger.debug  "#{left} #{right} #{reduced_l} #{reduced_r}"
+
   		return [cur_fs, truth] if reduced_l.empty? || reduced_r.empty?
+
+  		# Truth for left- and right-reduced arrays
+
 		truth_l = summary?(data, filter, [[target_param, reduced_l]])
 		truth_r = summary?(data, filter, [[target_param, reduced_r]])
 
-		#logger.debug "#{filter} #{cur_fs} -> #{reduced_l} #{truth_l} #{reduced_r} #{truth_r}"
+		# Theshold value, if greater than specified, we still can reduce FS
 
-		threshold = 0.7
+		threshold = 0.8
 
-		return [cur_fs, truth] if ((truth_l < threshold && truth_r < threshold) || li == ri)
-		return shrink_fs(data, filter, target_param, reduced_l, truth_l, li+2, ri) if truth_r < threshold
-		return shrink_fs(data, filter, target_param, reduced_r, truth_r, li, ri-2) if truth_l < threshold
-		[shrink_fs(data, filter, target_param, reduced_l, truth_l, li+2, ri),
-			shrink_fs(data, filter, target_param, reduced_r, truth_r, li, ri-2)].max_by{|_, t| t}
+		# If both reduced FSs give threshold lower than specified, return unreduced array
+
+		return [cur_fs, truth, level] if ((truth_l < threshold && truth_r < threshold) || li == ri)
+
+		# If a reduced FS's truth is greater than threshold, reduce futher
+
+		return shrink_fs(data, filter, target_param, reduced_l, truth_l, li+2, ri, level+1) if truth_r < threshold
+		return shrink_fs(data, filter, target_param, reduced_r, truth_r, li, ri-2, level+1) if truth_l < threshold
+		[shrink_fs(data, filter, target_param, reduced_l, truth_l, li+2, ri, level+1),
+			shrink_fs(data, filter, target_param, reduced_r, truth_r, li, ri-2, level+1)].max_by{|_, _, l| l}
+
 	end
 
 	def self.fs_to_s fs
